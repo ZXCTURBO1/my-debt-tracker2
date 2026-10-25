@@ -1,0 +1,952 @@
+<!DOCTYPE html>
+<html lang="ru">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+    <title>Scarlet Spider: Debt Tracker</title>
+    <!-- Telegram WebApp SDK -->
+    <script src="https://telegram.org/js/telegram-web-app.js"></script>
+    <!-- Tailwind CSS -->
+    <script src="https://cdn.tailwindcss.com"></script>
+    <!-- Lucide Icons -->
+    <script src="https://unpkg.com/lucide@latest"></script>
+    <!-- Chart.js -->
+    <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+    <style>
+        :root {
+            --spider-red: #ef4444;
+            --spider-red-dark: #991b1b;
+            --spider-blue: #0f172a;
+            --spider-blue-card: #1e293b;
+        }
+
+        body {
+            background-color: #090d16;
+            color: #f8fafc;
+            font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
+            -webkit-tap-highlight-color: transparent;
+            background-image: 
+                radial-gradient(circle at 50% 0%, rgba(220, 38, 38, 0.15) 0%, transparent 60%),
+                radial-gradient(circle at 100% 100%, rgba(15, 23, 42, 0.8) 0%, transparent 50%);
+            background-attachment: fixed;
+        }
+
+        .spider-web-bg {
+            background-image: radial-gradient(rgba(239, 68, 68, 0.08) 1px, transparent 0);
+            background-size: 18px 18px;
+        }
+
+        .scarlet-card {
+            background: linear-gradient(145deg, rgba(30, 41, 59, 0.85), rgba(15, 23, 42, 0.95));
+            border: 1px solid rgba(239, 68, 68, 0.2);
+            box-shadow: 0 8px 32px 0 rgba(0, 0, 0, 0.37);
+            backdrop-filter: blur(8px);
+        }
+
+        .scarlet-card-glow {
+            border: 1px solid rgba(239, 68, 68, 0.5);
+            box-shadow: 0 0 15px rgba(239, 68, 68, 0.25);
+        }
+
+        .scarlet-btn {
+            background: linear-gradient(135deg, #dc2626 0%, #991b1b 100%);
+            box-shadow: 0 4px 15px rgba(220, 38, 38, 0.4);
+            transition: all 0.2s ease;
+        }
+
+        .scarlet-btn:active {
+            transform: scale(0.97);
+            box-shadow: 0 2px 8px rgba(220, 38, 38, 0.6);
+        }
+
+        .scarlet-input {
+            background-color: rgba(15, 23, 42, 0.9);
+            border: 1px solid rgba(239, 68, 68, 0.25);
+            color: #ffffff;
+            transition: all 0.2s ease;
+        }
+
+        .scarlet-input:focus {
+            border-color: #ef4444;
+            box-shadow: 0 0 10px rgba(239, 68, 68, 0.4);
+            outline: none;
+        }
+
+        .custom-scrollbar::-webkit-scrollbar {
+            width: 4px;
+        }
+        .custom-scrollbar::-webkit-scrollbar-track {
+            background: rgba(0,0,0,0.2);
+        }
+        .custom-scrollbar::-webkit-scrollbar-thumb {
+            background: rgba(239, 68, 68, 0.4);
+            border-radius: 4px;
+        }
+    </style>
+</head>
+<body class="min-h-screen pb-20 spider-web-bg custom-scrollbar">
+
+    <!-- Header Navigation -->
+    <header class="sticky top-0 z-40 bg-[#090d16]/90 border-b border-red-900/40 backdrop-blur-md px-4 py-3 flex justify-between items-center shadow-lg shadow-red-950/20">
+        <div class="flex items-center space-x-2.5">
+            <div class="w-9 h-9 rounded-xl scarlet-btn flex items-center justify-center text-white font-bold border border-red-400/30">
+                <i data-lucide="spider" class="w-5 h-5 text-white"></i>
+            </div>
+            <span class="font-extrabold text-sm tracking-wide text-white">Scarlet Tracker</span>
+        </div>
+
+        <div class="flex items-center gap-2">
+            <!-- Currency Selector -->
+            <select id="currency-select" class="bg-red-950/60 border border-red-800/50 text-red-300 font-bold text-xs rounded-lg px-2 py-1.5 focus:outline-none focus:border-red-500 transition-all">
+                <option value="RUB">₽ RUB</option>
+                <option value="USD">$ USD</option>
+                <option value="EUR">€ EUR</option>
+                <option value="KZT">₸ KZT</option>
+                <option value="BYN">Br BYN</option>
+                <option value="AED">AED</option>
+                <option value="CNY">¥ CNY</option>
+                <option value="TRY">₺ TRY</option>
+            </select>
+
+            <button id="reset-btn" class="px-2.5 py-1.5 bg-red-950/40 hover:bg-red-900/50 border border-red-800/40 text-red-400 rounded-lg transition-all text-xs flex items-center gap-1">
+                <i data-lucide="rotate-ccw" class="w-3.5 h-3.5"></i>
+                <span>Сброс</span>
+            </button>
+        </div>
+    </header>
+
+    <!-- Main Container -->
+    <main class="max-w-md mx-auto px-4 py-4 space-y-5">
+
+        <!-- Overall Debt Progress Bar & Manual Mode Widget -->
+        <div class="scarlet-card scarlet-card-glow p-4 rounded-2xl space-y-3">
+            <div class="flex justify-between items-center border-b border-red-900/30 pb-2">
+                <span class="text-[10px] uppercase tracking-wider text-red-400 font-bold flex items-center gap-1.5">
+                    <i data-lucide="sliders" class="w-3.5 h-3.5"></i> Режим расчёта общего долга
+                </span>
+                <div class="flex bg-slate-950 p-0.5 rounded-lg border border-red-900/30 text-[10px]">
+                    <button id="mode-auto-btn" class="px-2 py-1 rounded-md font-bold transition-all text-white bg-red-800">Авто</button>
+                    <button id="mode-manual-btn" class="px-2 py-1 rounded-md font-bold transition-all text-slate-400 hover:text-white">Вручную</button>
+                </div>
+            </div>
+
+            <!-- Manual Input -->
+            <div id="manual-debt-container" class="hidden pt-1 pb-1">
+                <label class="text-[11px] text-slate-300 font-medium mb-1 block">Указать общую сумму долга вручную (0 – 10 000 000):</label>
+                <div class="relative">
+                    <input type="number" id="manual-debt-input" min="0" max="10000000" placeholder="например: 220000" class="scarlet-input w-full rounded-xl pl-3.5 pr-10 py-2 text-sm font-bold text-red-400">
+                    <span id="manual-currency-symbol" class="absolute right-3 top-2.5 text-xs text-slate-400 font-bold">₽</span>
+                </div>
+            </div>
+
+            <div class="flex justify-between items-end pt-1">
+                <div>
+                    <span class="text-[10px] uppercase tracking-wider text-slate-400 font-bold block">Общая задолженность</span>
+                    <span id="total-debt-sum" class="text-2xl font-black text-white">0 ₽</span>
+                </div>
+                <div class="text-right">
+                    <span class="text-[10px] uppercase tracking-wider text-slate-400 font-bold block">Осталось выплатить</span>
+                    <span id="debt-progress-percent" class="text-sm font-bold text-red-400">100%</span>
+                </div>
+            </div>
+
+            <div class="w-full bg-slate-900/80 rounded-full h-3 border border-red-900/30 overflow-hidden p-0.5">
+                <div id="debt-progress-bar" class="bg-gradient-to-r from-red-600 to-red-400 h-full rounded-full transition-all duration-500 shadow-[0_0_10px_rgba(239,68,68,0.5)]" style="width: 100%"></div>
+            </div>
+        </div>
+
+        <!-- Navigation Switcher -->
+        <div class="grid grid-cols-3 gap-1.5 bg-slate-950/80 p-1.5 rounded-xl border border-red-900/30 shadow-inner">
+            <button id="tab-budget" class="tab-btn text-xs font-bold py-2.5 rounded-lg transition-all text-center flex items-center justify-center gap-1.5 scarlet-btn text-white">
+                <i data-lucide="wallet" class="w-3.5 h-3.5"></i> Бюджет
+            </button>
+            <button id="tab-debts" class="tab-btn text-xs font-bold py-2.5 rounded-lg transition-all text-center flex items-center justify-center gap-1.5 text-slate-400 hover:text-white">
+                <i data-lucide="shield-alert" class="w-3.5 h-3.5"></i> Долги (<span id="debt-count-badge">0</span>)
+            </button>
+            <button id="tab-plan" class="tab-btn text-xs font-bold py-2.5 rounded-lg transition-all text-center flex items-center justify-center gap-1.5 text-slate-400 hover:text-white">
+                <i data-lucide="zap" class="w-3.5 h-3.5"></i> План
+            </button>
+        </div>
+
+        <!-- SECTION 1: BUDGET FORM -->
+        <section id="section-budget" class="space-y-4">
+            <div class="scarlet-card p-4 rounded-2xl space-y-4">
+                <h2 class="text-xs font-bold text-red-400 uppercase tracking-wider flex items-center gap-2 border-b border-red-900/30 pb-2.5">
+                    <i data-lucide="dollar-sign" class="w-4 h-4 text-red-500"></i> Финансовый Профиль (Месяц)
+                </h2>
+                
+                <div class="space-y-3.5">
+                    <div>
+                        <label class="text-xs text-slate-300 font-medium mb-1 block">Ежемесячный Доход (<span class="curr-symbol">₽</span>)</label>
+                        <input type="number" id="income-input" placeholder="например: 120000" class="scarlet-input w-full rounded-xl px-3.5 py-2.5 text-sm">
+                    </div>
+
+                    <div class="grid grid-cols-2 gap-3">
+                        <div>
+                            <label class="text-xs text-slate-300 font-medium mb-1 block">Жилье / Аренда (<span class="curr-symbol">₽</span>)</label>
+                            <input type="number" id="rent-input" placeholder="30000" class="scarlet-input w-full rounded-xl px-3.5 py-2.5 text-sm">
+                        </div>
+                        <div>
+                            <label class="text-xs text-slate-300 font-medium mb-1 block">Еда и Базовые нужды</label>
+                            <input type="number" id="food-input" placeholder="20000" class="scarlet-input w-full rounded-xl px-3.5 py-2.5 text-sm">
+                        </div>
+                    </div>
+
+                    <div class="grid grid-cols-2 gap-3">
+                        <div>
+                            <label class="text-xs text-slate-300 font-medium mb-1 block">Связь, Транспорт и др.</label>
+                            <input type="number" id="utility-input" placeholder="7000" class="scarlet-input w-full rounded-xl px-3.5 py-2.5 text-sm">
+                        </div>
+                        <div>
+                            <label class="text-xs text-red-400 font-bold mb-1 block">Остаток "На жизнь" (<span class="curr-symbol">₽</span>)</label>
+                            <input type="number" id="life-savings-input" placeholder="15000" class="scarlet-input w-full rounded-xl px-3.5 py-2.5 text-sm !border-red-500/60">
+                        </div>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Summary Widget -->
+            <div class="scarlet-card p-4 rounded-2xl space-y-3">
+                <h3 class="text-[10px] font-extrabold text-slate-400 uppercase tracking-widest">Распределение трат</h3>
+                
+                <div class="grid grid-cols-2 gap-3">
+                    <div class="bg-slate-950/70 p-3 rounded-xl border border-red-900/30">
+                        <span class="text-[11px] text-slate-400 block mb-0.5">Доступно на долги</span>
+                        <span id="debt-budget-val" class="text-lg font-black text-red-400">0 ₽</span>
+                    </div>
+                    <div class="bg-slate-950/70 p-3 rounded-xl border border-red-900/30">
+                        <span class="text-[11px] text-slate-400 block mb-0.5">Мин. суммарный платеж</span>
+                        <span id="min-payments-total-val" class="text-lg font-black text-slate-200">0 ₽</span>
+                    </div>
+                </div>
+
+                <div id="budget-status-box" class="p-3 rounded-xl text-xs flex items-center gap-2.5 bg-slate-950 border border-slate-800">
+                    <i id="budget-status-icon" data-lucide="info" class="w-4 h-4 shrink-0 text-red-400"></i>
+                    <span id="budget-status-text" class="text-slate-300">Заполните доходы и укажите долги для расчета.</span>
+                </div>
+            </div>
+        </section>
+
+        <!-- SECTION 2: DEBTS MANAGEMENT -->
+        <section id="section-debts" class="space-y-4 hidden">
+            <!-- Add/Edit Debt Form -->
+            <div class="scarlet-card p-4 rounded-2xl space-y-3">
+                <div class="flex justify-between items-center border-b border-red-900/30 pb-2.5">
+                    <h2 class="text-xs font-bold text-red-400 uppercase tracking-wider flex items-center gap-2">
+                        <i data-lucide="plus-circle" class="w-4 h-4 text-red-500"></i> <span id="debt-form-title">Добавить новый долг</span>
+                    </h2>
+                </div>
+
+                <form id="add-debt-form" class="space-y-3">
+                    <input type="hidden" id="debt-edit-id">
+                    
+                    <div class="grid grid-cols-2 gap-3">
+                        <div>
+                            <label class="text-xs text-slate-300 font-medium mb-1 block">Название долга</label>
+                            <input type="text" id="debt-name" required placeholder="Кредитка / Банк" class="scarlet-input w-full rounded-xl px-3 py-2 text-sm">
+                        </div>
+                        <div>
+                            <label class="text-xs text-slate-300 font-medium mb-1 block">Категория / На что</label>
+                            <input type="text" id="debt-category" required placeholder="Ремонт / Техника" class="scarlet-input w-full rounded-xl px-3 py-2 text-sm">
+                        </div>
+                    </div>
+                    
+                    <div class="grid grid-cols-2 gap-3">
+                        <div>
+                            <label class="text-xs text-slate-300 font-medium mb-1 block">Сумма долга (<span class="curr-symbol">₽</span>)</label>
+                            <input type="number" id="debt-amount" min="0" max="10000000" required placeholder="150000" class="scarlet-input w-full rounded-xl px-3 py-2 text-sm">
+                        </div>
+                        <div>
+                            <label class="text-xs text-slate-300 font-medium mb-1 block">Ставка (% в год)</label>
+                            <input type="number" id="debt-rate" step="0.1" min="0" required placeholder="24.9" class="scarlet-input w-full rounded-xl px-3 py-2 text-sm">
+                        </div>
+                    </div>
+
+                    <div>
+                        <label class="text-xs text-slate-300 font-medium mb-1 block">Ежемесячный мин. платеж (<span class="curr-symbol">₽</span>)</label>
+                        <input type="number" id="debt-min-payment" min="0" required placeholder="6000" class="scarlet-input w-full rounded-xl px-3 py-2 text-sm">
+                    </div>
+
+                    <div class="flex gap-2">
+                        <button type="button" id="cancel-edit-btn" class="hidden flex-1 py-2.5 bg-slate-800 hover:bg-slate-700 text-slate-300 font-bold rounded-xl text-xs transition-all">
+                            Отмена
+                        </button>
+                        <button type="submit" class="flex-1 scarlet-btn text-white font-bold py-2.5 rounded-xl text-xs flex items-center justify-center gap-2">
+                            <i data-lucide="check" class="w-4 h-4"></i> <span id="debt-form-submit-text">Сохранить долг</span>
+                        </button>
+                    </div>
+                </form>
+            </div>
+
+            <!-- List of Debts -->
+            <div class="space-y-2.5">
+                <h3 class="text-[10px] font-extrabold text-slate-400 uppercase tracking-widest px-1">Активные обязательства</h3>
+                <div id="debts-list" class="space-y-2.5"></div>
+            </div>
+        </section>
+
+        <!-- SECTION 3: CALCULATION & STRATEGY PLAN -->
+        <section id="section-plan" class="space-y-4 hidden">
+            <div class="scarlet-card p-4 rounded-2xl space-y-3">
+                <h2 class="text-xs font-bold text-red-400 uppercase tracking-wider flex items-center gap-2 border-b border-red-900/30 pb-2.5">
+                    <i data-lucide="crosshair" class="w-4 h-4 text-red-500"></i> Стратегия Ликвидации
+                </h2>
+
+                <div class="grid grid-cols-2 gap-2.5">
+                    <button id="strat-snowball" class="strat-btn p-3 rounded-xl border text-left transition-all bg-red-950/40 border-red-500 text-white shadow-[0_0_10px_rgba(239,68,68,0.2)]">
+                        <div class="flex items-center justify-between mb-1">
+                            <span class="font-extrabold text-xs text-red-400">❄️ Снежный ком</span>
+                        </div>
+                        <p class="text-[10px] text-slate-300 leading-tight">Сначала мелкие долги. Быстрый психологический результат.</p>
+                    </button>
+
+                    <button id="strat-avalanche" class="strat-btn p-3 rounded-xl border text-left transition-all bg-slate-950 border-slate-800 text-slate-400 hover:text-white">
+                        <div class="flex items-center justify-between mb-1">
+                            <span class="font-extrabold text-xs text-red-400">🌋 Лавина</span>
+                        </div>
+                        <p class="text-[10px] text-slate-300 leading-tight">Сначала высокий %. Максимальная экономия на процентах.</p>
+                    </button>
+                </div>
+            </div>
+
+            <div class="scarlet-card p-4 rounded-2xl space-y-4">
+                <div class="flex justify-between items-center">
+                    <h3 class="text-[10px] font-extrabold text-slate-400 uppercase tracking-widest">Прогноз свободы</h3>
+                    <span id="plan-strategy-badge" class="text-[10px] bg-red-950 border border-red-700/50 text-red-300 px-2.5 py-0.5 rounded-full font-bold">Снежный ком</span>
+                </div>
+
+                <div class="grid grid-cols-2 gap-3">
+                    <div class="bg-slate-950/70 p-3 rounded-xl border border-red-900/30">
+                        <span class="text-[10px] text-slate-400 block uppercase">Свобода через</span>
+                        <span id="result-months" class="text-xl font-black text-white">0 мес.</span>
+                    </div>
+                    <div class="bg-slate-950/70 p-3 rounded-xl border border-red-900/30">
+                        <span class="text-[10px] text-slate-400 block uppercase">Переплата по %</span>
+                        <span id="result-overpayment" class="text-xl font-black text-red-400">0 ₽</span>
+                    </div>
+                </div>
+
+                <div class="mt-2 h-48 w-full">
+                    <canvas id="payoffChart"></canvas>
+                </div>
+            </div>
+
+            <div class="scarlet-card p-4 rounded-2xl space-y-3">
+                <h3 class="text-[10px] font-extrabold text-slate-400 uppercase tracking-widest">Помесячный график выплат</h3>
+                <div id="monthly-schedule" class="space-y-2 max-h-72 overflow-y-auto pr-1 custom-scrollbar"></div>
+            </div>
+        </section>
+
+    </main>
+
+    <!-- Modal Delete Confirmation -->
+    <div id="confirm-modal" class="fixed inset-0 bg-black/80 backdrop-blur-md z-50 hidden flex items-center justify-center p-4">
+        <div class="scarlet-card scarlet-card-glow p-5 rounded-2xl max-w-xs w-full space-y-4 text-center">
+            <i data-lucide="spider" class="w-10 h-10 text-red-500 mx-auto animate-pulse"></i>
+            <h3 class="font-bold text-sm text-white">Удалить данное обязательство?</h3>
+            <div class="flex gap-2.5">
+                <button id="cancel-delete-btn" class="flex-1 py-2.5 bg-slate-900 hover:bg-slate-800 rounded-xl text-xs font-bold text-slate-300 border border-slate-700">Отмена</button>
+                <button id="confirm-delete-btn" class="flex-1 py-2.5 scarlet-btn rounded-xl text-xs font-bold text-white">Удалить</button>
+            </div>
+        </div>
+    </div>
+
+    <!-- Modal Reset Confirmation -->
+    <div id="reset-modal" class="fixed inset-0 bg-black/80 backdrop-blur-md z-50 hidden flex items-center justify-center p-4">
+        <div class="scarlet-card scarlet-card-glow p-5 rounded-2xl max-w-xs w-full space-y-4 text-center">
+            <i data-lucide="alert-triangle" class="w-10 h-10 text-red-500 mx-auto animate-bounce"></i>
+            <h3 class="font-bold text-sm text-white">Сбросить все сохранённые данные и очистить список долгов?</h3>
+            <div class="flex gap-2.5">
+                <button id="cancel-reset-btn" class="flex-1 py-2.5 bg-slate-900 hover:bg-slate-800 rounded-xl text-xs font-bold text-slate-300 border border-slate-700">Отмена</button>
+                <button id="confirm-reset-btn" class="flex-1 py-2.5 scarlet-btn rounded-xl text-xs font-bold text-white">Сбросить</button>
+            </div>
+        </div>
+    </div>
+
+    <script>
+        const tg = window.Telegram && window.Telegram.WebApp ? window.Telegram.WebApp : null;
+        if (tg) {
+            try {
+                tg.ready();
+                tg.expand();
+            } catch(e) { console.log('TG Init bypass', e); }
+        }
+
+        const CURRENCIES = {
+            RUB: '₽', USD: '$', EUR: '€', KZT: '₸', BYN: 'Br', AED: 'AED', CNY: '¥', TRY: '₺'
+        };
+
+        function triggerHaptic(type = 'impact', style = 'medium') {
+            if (tg && tg.HapticFeedback) {
+                try {
+                    if (type === 'impact') tg.HapticFeedback.impactOccurred(style);
+                    if (type === 'notification') tg.HapticFeedback.notificationOccurred(style);
+                } catch(e) {}
+            }
+        }
+
+        function safeCreateIcons() {
+            if (window.lucide) {
+                try { lucide.createIcons(); } catch(e) {}
+            }
+        }
+
+        const state = {
+            currency: 'RUB',
+            debtMode: 'auto',
+            manualDebtAmount: 220000,
+            budget: {
+                income: 110000,
+                rent: 30000,
+                food: 20000,
+                utility: 6000,
+                lifeSavings: 15000
+            },
+            debts: [
+                { id: '1', name: 'Кредитка Сбер', category: 'Бытовая техника', amount: 80000, rate: 28.5, minPayment: 5000, initialAmount: 80000 },
+                { id: '2', name: 'Альфа Потребительский', category: 'Ремонт авто', amount: 140000, rate: 19.5, minPayment: 7000, initialAmount: 140000 }
+            ],
+            strategy: 'snowball',
+            deletePendingId: null
+        };
+
+        let payoffChart = null;
+
+        function getCurrencySymbol() {
+            return CURRENCIES[state.currency] || '₽';
+        }
+
+        function formatMoney(amount) {
+            const sym = getCurrencySymbol();
+            const formatted = Math.round(Number(amount) || 0).toLocaleString('ru-RU');
+            return ['USD', 'EUR', 'GBP'].includes(state.currency) ? `${sym}${formatted}` : `${formatted} ${sym}`;
+        }
+
+        function escapeHtml(str) {
+            return String(str || '').replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;').replace(/"/g, '&quot;');
+        }
+
+        function getTotalDebtAmount() {
+            if (state.debtMode === 'manual') {
+                return Number(state.manualDebtAmount) || 0;
+            }
+            return state.debts.reduce((sum, d) => sum + (Number(d.amount) || 0), 0);
+        }
+
+        function getAvailableDebtBudget() {
+            const inc = Number(state.budget.income) || 0;
+            const rent = Number(state.budget.rent) || 0;
+            const food = Number(state.budget.food) || 0;
+            const util = Number(state.budget.utility) || 0;
+            const savings = Number(state.budget.lifeSavings) || 0;
+            return Math.max(0, inc - (rent + food + util + savings));
+        }
+
+        function getTotalMinPayments() {
+            return state.debts.reduce((sum, d) => sum + (Number(d.minPayment) || 0), 0);
+        }
+
+        function updateModeUI() {
+            const autoBtn = document.getElementById('mode-auto-btn');
+            const manualBtn = document.getElementById('mode-manual-btn');
+            const manualContainer = document.getElementById('manual-debt-container');
+
+            if (state.debtMode === 'manual') {
+                autoBtn.className = "px-2 py-1 rounded-md font-bold transition-all text-slate-400 hover:text-white";
+                manualBtn.className = "px-2 py-1 rounded-md font-bold transition-all text-white bg-red-800";
+                manualContainer.classList.remove('hidden');
+            } else {
+                autoBtn.className = "px-2 py-1 rounded-md font-bold transition-all text-white bg-red-800";
+                manualBtn.className = "px-2 py-1 rounded-md font-bold transition-all text-slate-400 hover:text-white";
+                manualContainer.classList.add('hidden');
+            }
+        }
+
+        function calculatePayoffSchedule() {
+            const totalDebt = getTotalDebtAmount();
+            const monthlyBudget = getAvailableDebtBudget();
+            
+            if (totalDebt <= 0 || monthlyBudget <= 0) {
+                return { totalMonths: 0, totalOverpayment: 0, monthlyData: [] };
+            }
+
+            if (state.debts.length === 0) {
+                const months = Math.ceil(totalDebt / monthlyBudget);
+                const monthlyData = [];
+                let rem = totalDebt;
+                for (let m = 1; m <= Math.min(months, 120); m++) {
+                    rem = Math.max(0, rem - monthlyBudget);
+                    monthlyData.push({ month: m, remainingBalance: rem, monthlyInterest: 0 });
+                }
+                return { totalMonths: months, totalOverpayment: 0, monthlyData };
+            }
+
+            let debtsCopy = state.debts.map(d => ({
+                id: d.id,
+                name: d.name,
+                amount: Number(d.amount) || 0,
+                rate: Number(d.rate) || 0,
+                minPayment: Number(d.minPayment) || 0
+            }));
+
+            if (state.debtMode === 'manual' && totalDebt > 0) {
+                const autoTotal = state.debts.reduce((s, d) => s + (Number(d.amount) || 0), 0);
+                if (autoTotal > 0) {
+                    const ratio = totalDebt / autoTotal;
+                    debtsCopy.forEach(d => { d.amount = Math.round(d.amount * ratio); });
+                }
+            }
+
+            let month = 0;
+            let totalOverpayment = 0;
+            const monthlyData = [];
+            const maxMonths = 360;
+
+            while (debtsCopy.some(d => d.amount > 0) && month < maxMonths) {
+                month++;
+                let extraCash = monthlyBudget;
+                let monthInterestSum = 0;
+
+                debtsCopy.forEach(d => {
+                    if (d.amount > 0) {
+                        const interest = (d.amount * (d.rate / 100)) / 12;
+                        monthInterestSum += interest;
+                        d.amount += interest;
+                        totalOverpayment += interest;
+                    }
+                });
+
+                debtsCopy.forEach(d => {
+                    if (d.amount > 0) {
+                        const pay = Math.min(d.amount, d.minPayment, extraCash);
+                        d.amount -= pay;
+                        extraCash -= pay;
+                    }
+                });
+
+                const activeDebts = debtsCopy.filter(d => d.amount > 0);
+                if (state.strategy === 'snowball') {
+                    activeDebts.sort((a, b) => a.amount - b.amount);
+                } else {
+                    activeDebts.sort((a, b) => b.rate - a.rate);
+                }
+
+                for (let d of activeDebts) {
+                    if (extraCash <= 0) break;
+                    const extraPay = Math.min(d.amount, extraCash);
+                    d.amount -= extraPay;
+                    extraCash -= extraPay;
+                }
+
+                const currentRemaining = debtsCopy.reduce((sum, d) => sum + d.amount, 0);
+                monthlyData.push({
+                    month,
+                    remainingBalance: Math.round(currentRemaining),
+                    monthlyInterest: Math.round(monthInterestSum)
+                });
+            }
+
+            return {
+                totalMonths: month,
+                totalOverpayment: Math.round(totalOverpayment),
+                monthlyData
+            };
+        }
+
+        function renderPayoffChart(monthlyData) {
+            if (!window.Chart) return;
+            const ctx = document.getElementById('payoffChart')?.getContext('2d');
+            if (!ctx) return;
+
+            if (payoffChart) payoffChart.destroy();
+
+            const labels = monthlyData.map(d => `M${d.month}`);
+            const data = monthlyData.map(d => d.remainingBalance);
+
+            payoffChart = new Chart(ctx, {
+                type: 'line',
+                data: {
+                    labels,
+                    datasets: [{
+                        label: 'Остаток долга',
+                        data,
+                        borderColor: '#ef4444',
+                        backgroundColor: 'rgba(239, 68, 68, 0.15)',
+                        fill: true,
+                        tension: 0.3,
+                        pointRadius: 2,
+                        pointBackgroundColor: '#ef4444'
+                    }]
+                },
+                options: {
+                    responsive: true,
+                    maintainAspectRatio: false,
+                    plugins: { legend: { display: false } },
+                    scales: {
+                        x: { ticks: { color: '#64748b', font: { size: 9 } }, grid: { color: 'rgba(239, 68, 68, 0.05)' } },
+                        y: { ticks: { color: '#64748b', font: { size: 9 } }, grid: { color: 'rgba(239, 68, 68, 0.08)' } }
+                    }
+                }
+            });
+        }
+
+        function switchTab(tabName) {
+            triggerHaptic('impact', 'light');
+            ['budget', 'debts', 'plan'].forEach(name => {
+                const section = document.getElementById(`section-${name}`);
+                const btn = document.getElementById(`tab-${name}`);
+                if (name === tabName) {
+                    section.classList.remove('hidden');
+                    btn.className = "tab-btn text-xs font-bold py-2.5 rounded-lg transition-all text-center flex items-center justify-center gap-1.5 scarlet-btn text-white";
+                } else {
+                    section.classList.add('hidden');
+                    btn.className = "tab-btn text-xs font-bold py-2.5 rounded-lg transition-all text-center flex items-center justify-center gap-1.5 text-slate-400 hover:text-white";
+                }
+            });
+            if (tabName === 'plan') updatePlanView();
+        }
+
+        function saveData() {
+            try {
+                localStorage.setItem('scarlet_spider_debt_data', JSON.stringify({
+                    currency: state.currency,
+                    debtMode: state.debtMode,
+                    manualDebtAmount: state.manualDebtAmount,
+                    budget: state.budget,
+                    debts: state.debts,
+                    strategy: state.strategy
+                }));
+            } catch(e) {}
+        }
+
+        function loadData() {
+            const savedData = localStorage.getItem('scarlet_spider_debt_data');
+            if (savedData) {
+                try {
+                    const parsed = JSON.parse(savedData);
+                    if (parsed.currency) state.currency = parsed.currency;
+                    if (parsed.budget) state.budget = parsed.budget;
+                    if (parsed.debts) state.debts = parsed.debts;
+                    if (parsed.strategy) state.strategy = parsed.strategy;
+                    if (parsed.debtMode) state.debtMode = parsed.debtMode;
+                    if (parsed.manualDebtAmount !== undefined) state.manualDebtAmount = parsed.manualDebtAmount;
+                } catch (e) {}
+            }
+        }
+
+        function syncInputsFromState() {
+            document.getElementById('currency-select').value = state.currency || 'RUB';
+            document.getElementById('income-input').value = state.budget.income || '';
+            document.getElementById('rent-input').value = state.budget.rent || '';
+            document.getElementById('food-input').value = state.budget.food || '';
+            document.getElementById('utility-input').value = state.budget.utility || '';
+            document.getElementById('life-savings-input').value = state.budget.lifeSavings || '';
+            document.getElementById('manual-debt-input').value = state.manualDebtAmount || '';
+            updateCurrencyUI();
+            updateModeUI();
+        }
+
+        function updateCurrencyUI() {
+            const sym = getCurrencySymbol();
+            document.querySelectorAll('.curr-symbol').forEach(el => el.innerText = sym);
+            const manualSymbol = document.getElementById('manual-currency-symbol');
+            if (manualSymbol) manualSymbol.innerText = sym;
+        }
+
+        function updateDebtProgressBar() {
+            const currentTotal = getTotalDebtAmount();
+            document.getElementById('total-debt-sum').innerText = formatMoney(currentTotal);
+            
+            const maxRef = Math.max(1000000, currentTotal);
+            const percentLeft = currentTotal === 0 ? 0 : Math.min(100, Math.round((currentTotal / maxRef) * 100));
+            document.getElementById('debt-progress-percent').innerText = `${currentTotal === 0 ? '0%' : percentLeft + '%'}`;
+            document.getElementById('debt-progress-bar').style.width = `${currentTotal === 0 ? '0%' : Math.max(5, percentLeft) + '%'}`;
+        }
+
+        function updateBudgetSummary() {
+            const available = getAvailableDebtBudget();
+            const minPayments = getTotalMinPayments();
+
+            document.getElementById('debt-budget-val').innerText = formatMoney(available);
+            document.getElementById('min-payments-total-val').innerText = formatMoney(minPayments);
+
+            const statusBox = document.getElementById('budget-status-box');
+            const statusIcon = document.getElementById('budget-status-icon');
+            const statusText = document.getElementById('budget-status-text');
+
+            if (available < minPayments) {
+                statusBox.className = "p-3 rounded-xl text-xs flex items-center gap-2.5 bg-red-950/60 border border-red-600/50 text-red-200";
+                statusIcon.setAttribute('data-lucide', 'alert-octagon');
+                statusText.innerText = `Внимание! Доступно (${formatMoney(available)}) МЕНЬШЕ минимальных обязательств (${formatMoney(minPayments)})!`;
+            } else if (available === minPayments) {
+                statusBox.className = "p-3 rounded-xl text-xs flex items-center gap-2.5 bg-amber-950/50 border border-amber-600/40 text-amber-200";
+                statusIcon.setAttribute('data-lucide', 'alert-triangle');
+                statusText.innerText = `Бюджета хватает только на минимальные платежи.`;
+            } else {
+                statusBox.className = "p-3 rounded-xl text-xs flex items-center gap-2.5 bg-slate-950 border border-red-900/40 text-slate-200";
+                statusIcon.setAttribute('data-lucide', 'zap');
+                statusText.innerText = `Отлично! Доп. ускорение выплат: +${formatMoney(available - minPayments)} в месяц!`;
+            }
+            safeCreateIcons();
+            updateDebtProgressBar();
+        }
+
+        function renderDebtsList() {
+            const container = document.getElementById('debts-list');
+            document.getElementById('debt-count-badge').innerText = state.debts.length;
+            
+            if (state.debts.length === 0) {
+                container.innerHTML = `
+                    <div class="text-center py-8 text-slate-500 space-y-2 scarlet-card rounded-2xl">
+                        <i data-lucide="shield-check" class="w-8 h-8 mx-auto text-red-500/50"></i>
+                        <p class="text-xs">Все обязательства ликвидированы!</p>
+                    </div>
+                `;
+                safeCreateIcons();
+                return;
+            }
+
+            container.innerHTML = state.debts.map(debt => `
+                <div class="scarlet-card p-3.5 rounded-xl flex justify-between items-center shadow-md">
+                    <div class="space-y-1">
+                        <div class="flex items-center gap-2">
+                            <span class="font-extrabold text-sm text-white">${escapeHtml(debt.name)}</span>
+                            <span class="text-[9px] bg-red-950 text-red-400 border border-red-800 px-1.5 py-0.5 rounded font-bold">${debt.rate}%/год</span>
+                        </div>
+                        <div class="text-[11px] text-slate-400 flex flex-wrap gap-2">
+                            <span>Категория: <strong class="text-slate-200">${escapeHtml(debt.category || 'Общее')}</strong></span>
+                            <span>• Долг: <strong class="text-red-400">${formatMoney(debt.amount)}</strong></span>
+                        </div>
+                    </div>
+                    <div class="flex items-center gap-1">
+                        <button onclick="editDebt('${debt.id}')" class="p-2 text-slate-400 hover:text-white hover:bg-slate-800 rounded-lg transition-colors">
+                            <i data-lucide="edit-3" class="w-4 h-4"></i>
+                        </button>
+                        <button onclick="askDeleteDebt('${debt.id}')" class="p-2 text-slate-500 hover:text-red-400 hover:bg-red-950/50 rounded-lg transition-colors">
+                            <i data-lucide="trash-2" class="w-4 h-4"></i>
+                        </button>
+                    </div>
+                </div>
+            `).join('');
+
+            safeCreateIcons();
+        }
+
+        function updatePlanView() {
+            const planSection = document.getElementById('section-plan');
+            if (planSection && planSection.classList.contains('hidden')) return;
+
+            const res = calculatePayoffSchedule();
+
+            const badge = document.getElementById('plan-strategy-badge');
+            if (badge) {
+                badge.innerText = state.strategy === 'snowball' ? 'Снежный ком' : 'Лавина';
+            }
+
+            const monthsEl = document.getElementById('result-months');
+            const overpayEl = document.getElementById('result-overpayment');
+            if (monthsEl) monthsEl.innerText = `${res.totalMonths} мес.`;
+            if (overpayEl) overpayEl.innerText = formatMoney(res.totalOverpayment);
+
+            const scheduleContainer = document.getElementById('monthly-schedule');
+            if (scheduleContainer) {
+                if (res.monthlyData.length === 0) {
+                    scheduleContainer.innerHTML = `
+                        <div class="text-center py-4 text-slate-500 text-xs">
+                            Заполните параметры дохода и обязательств для расчета.
+                        </div>
+                    `;
+                } else {
+                    scheduleContainer.innerHTML = res.monthlyData.map(item => `
+                        <div class="flex justify-between items-center bg-slate-950/60 p-2.5 rounded-xl border border-red-900/20 text-xs">
+                            <span class="font-bold text-slate-300">Месяц ${item.month}</span>
+                            <div class="text-right">
+                                <span class="font-bold text-white block">${formatMoney(item.remainingBalance)} остаток</span>
+                                <span class="text-[10px] text-red-400 font-medium">+${formatMoney(item.monthlyInterest)} % за месяц</span>
+                            </div>
+                        </div>
+                    `).join('');
+                }
+            }
+
+            renderPayoffChart(res.monthlyData);
+        }
+
+        function editDebt(id) {
+            triggerHaptic('impact', 'light');
+            const debt = state.debts.find(d => d.id === id);
+            if (!debt) return;
+
+            document.getElementById('debt-edit-id').value = debt.id;
+            document.getElementById('debt-name').value = debt.name;
+            document.getElementById('debt-category').value = debt.category || '';
+            document.getElementById('debt-amount').value = debt.amount;
+            document.getElementById('debt-rate').value = debt.rate;
+            document.getElementById('debt-min-payment').value = debt.minPayment;
+
+            document.getElementById('debt-form-title').innerText = 'Редактировать долг';
+            document.getElementById('debt-form-submit-text').innerText = 'Обновить долг';
+            document.getElementById('cancel-edit-btn').classList.remove('hidden');
+            switchTab('debts');
+        }
+
+        function resetDebtForm() {
+            document.getElementById('add-debt-form').reset();
+            document.getElementById('debt-edit-id').value = '';
+            document.getElementById('debt-form-title').innerText = 'Добавить новый долг';
+            document.getElementById('debt-form-submit-text').innerText = 'Сохранить долг';
+            document.getElementById('cancel-edit-btn').classList.add('hidden');
+        }
+
+        function askDeleteDebt(id) {
+            triggerHaptic('impact', 'warning');
+            state.deletePendingId = id;
+            document.getElementById('confirm-modal').classList.remove('hidden');
+        }
+
+        document.addEventListener('DOMContentLoaded', () => {
+            loadData();
+            syncInputsFromState();
+            renderDebtsList();
+            updateBudgetSummary();
+
+            document.getElementById('tab-budget').addEventListener('click', () => switchTab('budget'));
+            document.getElementById('tab-debts').addEventListener('click', () => switchTab('debts'));
+            document.getElementById('tab-plan').addEventListener('click', () => switchTab('plan'));
+
+            document.getElementById('strat-snowball').addEventListener('click', () => {
+                triggerHaptic('impact', 'light');
+                state.strategy = 'snowball';
+                document.getElementById('strat-snowball').className = "strat-btn p-3 rounded-xl border text-left transition-all bg-red-950/40 border-red-500 text-white shadow-[0_0_10px_rgba(239,68,68,0.2)]";
+                document.getElementById('strat-avalanche').className = "strat-btn p-3 rounded-xl border text-left transition-all bg-slate-950 border-slate-800 text-slate-400 hover:text-white";
+                saveData();
+                updatePlanView();
+            });
+
+            document.getElementById('strat-avalanche').addEventListener('click', () => {
+                triggerHaptic('impact', 'light');
+                state.strategy = 'avalanche';
+                document.getElementById('strat-avalanche').className = "strat-btn p-3 rounded-xl border text-left transition-all bg-red-950/40 border-red-500 text-white shadow-[0_0_10px_rgba(239,68,68,0.2)]";
+                document.getElementById('strat-snowball').className = "strat-btn p-3 rounded-xl border text-left transition-all bg-slate-950 border-slate-800 text-slate-400 hover:text-white";
+                saveData();
+                updatePlanView();
+            });
+
+            document.getElementById('add-debt-form').addEventListener('submit', (e) => {
+                e.preventDefault();
+                triggerHaptic('notification', 'success');
+
+                const id = document.getElementById('debt-edit-id').value;
+                const name = document.getElementById('debt-name').value;
+                const category = document.getElementById('debt-category').value;
+                const amount = Number(document.getElementById('debt-amount').value) || 0;
+                const rate = Number(document.getElementById('debt-rate').value) || 0;
+                const minPayment = Number(document.getElementById('debt-min-payment').value) || 0;
+
+                if (id) {
+                    const idx = state.debts.findIndex(d => d.id === id);
+                    if (idx !== -1) {
+                        state.debts[idx] = { id, name, category, amount, rate, minPayment, initialAmount: amount };
+                    }
+                } else {
+                    state.debts.push({
+                        id: Date.now().toString(),
+                        name, category, amount, rate, minPayment, initialAmount: amount
+                    });
+                }
+
+                saveData();
+                resetDebtForm();
+                renderDebtsList();
+                updateBudgetSummary();
+                updatePlanView();
+            });
+
+            ['income-input', 'rent-input', 'food-input', 'utility-input', 'life-savings-input'].forEach(id => {
+                document.getElementById(id).addEventListener('input', () => {
+                    state.budget.income = Number(document.getElementById('income-input').value) || 0;
+                    state.budget.rent = Number(document.getElementById('rent-input').value) || 0;
+                    state.budget.food = Number(document.getElementById('food-input').value) || 0;
+                    state.budget.utility = Number(document.getElementById('utility-input').value) || 0;
+                    state.budget.lifeSavings = Number(document.getElementById('life-savings-input').value) || 0;
+                    saveData();
+                    updateBudgetSummary();
+                    updatePlanView();
+                });
+            });
+
+            document.getElementById('currency-select').addEventListener('change', (e) => {
+                triggerHaptic('impact', 'light');
+                state.currency = e.target.value;
+                saveData();
+                updateCurrencyUI();
+                renderDebtsList();
+                updateBudgetSummary();
+                updatePlanView();
+            });
+
+            document.getElementById('cancel-edit-btn').addEventListener('click', resetDebtForm);
+
+            document.getElementById('cancel-delete-btn').addEventListener('click', () => {
+                document.getElementById('confirm-modal').classList.add('hidden');
+                state.deletePendingId = null;
+            });
+
+            document.getElementById('confirm-delete-btn').addEventListener('click', () => {
+                triggerHaptic('notification', 'success');
+                if (state.deletePendingId) {
+                    state.debts = state.debts.filter(d => d.id !== state.deletePendingId);
+                    saveData();
+                    renderDebtsList();
+                    updateBudgetSummary();
+                    updatePlanView();
+                }
+                document.getElementById('confirm-modal').classList.add('hidden');
+                state.deletePendingId = null;
+            });
+
+            document.getElementById('reset-btn').addEventListener('click', () => {
+                triggerHaptic('impact', 'warning');
+                document.getElementById('reset-modal').classList.remove('hidden');
+            });
+
+            document.getElementById('cancel-reset-btn').addEventListener('click', () => {
+                document.getElementById('reset-modal').classList.add('hidden');
+            });
+
+            document.getElementById('confirm-reset-btn').addEventListener('click', () => {
+                triggerHaptic('notification', 'warning');
+                localStorage.removeItem('scarlet_spider_debt_data');
+                location.reload();
+            });
+
+            document.getElementById('mode-auto-btn').addEventListener('click', () => {
+                triggerHaptic('impact', 'light');
+                state.debtMode = 'auto';
+                saveData();
+                updateModeUI();
+                updateDebtProgressBar();
+                updatePlanView();
+            });
+
+            document.getElementById('mode-manual-btn').addEventListener('click', () => {
+                triggerHaptic('impact', 'light');
+                state.debtMode = 'manual';
+                saveData();
+                updateModeUI();
+                updateDebtProgressBar();
+                updatePlanView();
+            });
+
+            document.getElementById('manual-debt-input').addEventListener('input', (e) => {
+                state.manualDebtAmount = Number(e.target.value) || 0;
+                saveData();
+                updateDebtProgressBar();
+                updatePlanView();
+            });
+
+            safeCreateIcons();
+        });
+    </script>
+</body>
+</html>
